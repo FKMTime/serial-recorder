@@ -1,6 +1,10 @@
 #include <Arduino.h>
 #include <LittleFS.h>
+#include <SoftwareSerial.h>
 // #include <EEPROM.h>
+
+SoftwareSerial inputSerial(17, -1, true);
+SoftwareSerial outputSerial(-1, 17, true);
 
 byte* intToBytes(int n);
 int readIntFromBytes(byte* buff, int offset);
@@ -9,10 +13,14 @@ String readSerialCommand();
 String readNextArg(String &input);
 
 bool recording = false;
-unsigned long recordingStartedTime = 0;
+unsigned long lastRecordingTime = 0;
 File recordFile;
 
 bool playback = false;
+byte* playbackBuff;
+int playbackOffset = 0;
+int playbackLen = 0;
+
 bool showHelp = true;
 
 struct recordingInfo{
@@ -20,7 +28,7 @@ struct recordingInfo{
 };
 
 struct recordingFrame {
-  int delta;
+  int16_t delta;
   int data;
 };
 
@@ -47,11 +55,41 @@ void setup1() {
 void loop() {
   delay(100);
 
+  recordingFrame frame;
   if (recording) {
+    while (recording) {
+      if(inputSerial.available()) {
+        frame.delta = millis() - lastRecordingTime;
+        frame.data = inputSerial.read();
+        recordFile.write((byte*)&frame, sizeof(frame));
+
+        lastRecordingTime = millis();
+      }
+    }
+
+    inputSerial.end();
+  }
+
+  if(playback) {
     recordingFrame frame;
-    frame.delta = millis() - recordingStartedTime;
-    frame.data = 69420;
-    recordFile.write((byte*)&frame, sizeof(frame));
+    while (playbackLen > playbackOffset) {
+      memcpy(&frame, playbackBuff + playbackOffset, sizeof(frame));
+      playbackOffset += sizeof(frame);
+      if (frame.delta < 0) {
+        continue;
+      }
+
+      delay(frame.delta);
+
+      outputSerial.write(frame.data);
+      // Serial1.write(~frame.data);
+      // Serial.print((char)frame.data);
+    }
+
+    playback = false;
+    outputSerial.end();
+    // Serial1.end();
+    Serial.println("STOP");
   }
 }
 
@@ -122,6 +160,8 @@ void interprateCommand(String &input) {
 
     int baudRate = baud.toInt();
     if (baudRate == 0) baudRate = 115200;
+    // Serial1.setRX(17);
+    inputSerial.begin(baudRate);
 
     Serial.print("Starting recording to file with name: ");
     Serial.println(name);
@@ -132,7 +172,7 @@ void interprateCommand(String &input) {
 
     recordFile.write((byte*) &rInfo, sizeof(rInfo));
     recording = true;
-    recordingStartedTime = millis();
+    lastRecordingTime = millis();
   } else if(input.startsWith("delete")) {
     input.remove(0, 7);
     String name = readNextArg(input);
@@ -174,17 +214,19 @@ void interprateCommand(String &input) {
       memcpy(&dsInfo, buff + offset, sizeof(dsInfo));
       offset += sizeof(dsInfo);
 
+      delay(500);
+
+      int dbg = 0;
       Serial.println(dsInfo.baud);
+      outputSerial.begin(dsInfo.baud);
+      // Serial1.setTX(16);
+      // Serial1.begin(dsInfo.baud);
 
-      recordingFrame frame;
-      while (len > offset) {
-        memcpy(&frame, buff + offset, sizeof(frame));
-        offset += sizeof(frame);
-
-        Serial.println("Frame: ");
-        Serial.println(frame.delta);
-        Serial.println(frame.data);
-      }
+      playbackLen = len;
+      playbackOffset = offset;
+      playbackBuff = buff;
+      playback = true;
+      Serial.println("DSA");
       // Serial.println(readIntFromBytes(buff, 0));
     } else {
       Serial.println("Recording with that name doesn't exists!");
