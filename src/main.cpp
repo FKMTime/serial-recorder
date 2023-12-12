@@ -2,13 +2,27 @@
 #include <LittleFS.h>
 // #include <EEPROM.h>
 
+byte* intToBytes(int n);
+int readIntFromBytes(byte* buff, int offset);
 void interprateCommand(String &input);
 String readSerialCommand();
 String readNextArg(String &input);
 
-bool record = false;
+bool recording = false;
+unsigned long recordingStartedTime = 0;
+File recordFile;
+
 bool playback = false;
 bool showHelp = true;
+
+struct recordingInfo{
+  int baud;
+};
+
+struct recordingFrame {
+  int delta;
+  int data;
+};
 
 void setup() {
   LittleFS.begin();
@@ -31,7 +45,14 @@ void setup1() {
 }
 
 void loop() {
-  // delay(1000);
+  delay(100);
+
+  if (recording) {
+    recordingFrame frame;
+    frame.delta = millis() - recordingStartedTime;
+    frame.data = 69420;
+    recordFile.write((byte*)&frame, sizeof(frame));
+  }
 }
 
 void loop1() {
@@ -42,11 +63,12 @@ void loop1() {
 
   if (showHelp) {
     Serial.println("Execute function:");
-    Serial.println("- record [name] <baud>");
-    Serial.println("- play [name]");
-    Serial.println("- list");
-    Serial.println("- delete [name]");
-    Serial.println("- restart");
+    Serial.println("- record [name] <baud> // starts the recording");
+    Serial.println("- stop // stops the recording");
+    Serial.println("- play [name] // plays the recorded file");
+    Serial.println("- list // lists all recorded files");
+    Serial.println("- delete [name] // deletes recorded file");
+    Serial.println("- restart // restarts pico");
     Serial.println();
 
     showHelp = false;
@@ -76,6 +98,16 @@ void interprateCommand(String &input) {
       Serial.print(" | Size: ");
       Serial.println(dir.fileSize());
     }
+  } else if (input == "stop") {
+    if (recording) {
+      // recordFile.flush();
+      recording = false;
+      recordFile.close();
+
+      Serial.println("Stopped the recording and saved the file!");
+    } else {
+      Serial.println("Recording isn't started!");
+    }
   } else if(input.startsWith("record")) {
     input.remove(0, 7);
     String name = readNextArg(input);
@@ -91,12 +123,16 @@ void interprateCommand(String &input) {
     int baudRate = baud.toInt();
     if (baudRate == 0) baudRate = 115200;
 
+    Serial.print("Starting recording to file with name: ");
     Serial.println(name);
-    Serial.println(baudRate);
 
-    File f = LittleFS.open("/records/" + name, "w");
-    f.println(baudRate);
-    f.close();
+    recordFile = LittleFS.open("/records/" + name, "w");
+    recordingInfo rInfo;
+    rInfo.baud = baudRate;
+
+    recordFile.write((byte*) &rInfo, sizeof(rInfo));
+    recording = true;
+    recordingStartedTime = millis();
   } else if(input.startsWith("delete")) {
     input.remove(0, 7);
     String name = readNextArg(input);
@@ -128,11 +164,28 @@ void interprateCommand(String &input) {
 
     File f = LittleFS.open("/records/" + name, "r");
     if (f) {
-      String contents = f.readString();
+      int len = f.size();
+      byte buff[len];
+      f.readBytes((char*)buff, len);
       f.close();
+      
+      int offset = 0;
+      recordingInfo dsInfo;
+      memcpy(&dsInfo, buff + offset, sizeof(dsInfo));
+      offset += sizeof(dsInfo);
 
-      Serial.println("Contents: ");
-      Serial.println(contents);
+      Serial.println(dsInfo.baud);
+
+      recordingFrame frame;
+      while (len > offset) {
+        memcpy(&frame, buff + offset, sizeof(frame));
+        offset += sizeof(frame);
+
+        Serial.println("Frame: ");
+        Serial.println(frame.delta);
+        Serial.println(frame.data);
+      }
+      // Serial.println(readIntFromBytes(buff, 0));
     } else {
       Serial.println("Recording with that name doesn't exists!");
     }
@@ -144,6 +197,18 @@ void interprateCommand(String &input) {
   Serial.println();
 }
 
+byte* intToBytes(int n) {
+  byte bytes[4];
+  bytes[0] = (byte)(n >> 24);
+  bytes[1] = (byte)(n >> 16);
+  bytes[2] = (byte)(n >> 8);
+  bytes[3] = (byte)n;
+
+  return bytes;
+}
+int readIntFromBytes(byte* buff, int offset) {
+  return (buff[offset] << 24) + (buff[offset + 1] << 16) + (buff[offset + 2] << 8) + buff[offset + 3];
+}
 String readSerialCommand() {
   Serial.print("> ");
   String input = "";
