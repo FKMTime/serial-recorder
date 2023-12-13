@@ -23,9 +23,9 @@ int playbackLen = 0;
 
 bool showHelp = true;
 
-// maybe it should note frames count? because there is a problem with reading it afterwards
 struct recordingInfo{
   int baud;
+  bool inverted;
 };
 
 struct recordingFrame {
@@ -100,7 +100,7 @@ void loop() {
 
       delay(frame.delta);
       outputSerial.write(frame.data);
-      Serial.print((char)frame.data);
+      // Serial.print((char)frame.data);
     }
 
     playback = false;
@@ -120,7 +120,7 @@ void loop1() {
 
   if (showHelp) {
     Serial.println("Execute function:");
-    Serial.println("- record [name] <baud> // starts the recording");
+    Serial.println("- record [name] <baud> <inverted 0|1> // starts the recording");
     Serial.println("- stop // stops the recording");
     Serial.println("- play [name] // plays the recorded file");
     Serial.println("- list // lists all recorded files");
@@ -168,6 +168,7 @@ void interprateCommand(String &input) {
     input.remove(0, 7);
     String name = readNextArg(input);
     String baud = readNextArg(input);
+    String invertedString = readNextArg(input);
 
     if (name == "") {
       Serial.println("record takes at least name!\n");
@@ -178,8 +179,9 @@ void interprateCommand(String &input) {
 
     int baudRate = baud.toInt();
     if (baudRate == 0) baudRate = 115200;
-    // Serial1.setRX(17);
-    inputSerial.setInverted();
+    bool inverted = invertedString.toInt() == 1;
+
+    if (inverted) inputSerial.setInverted();
     inputSerial.begin(baudRate);
 
     Serial.print("Starting recording to file with name: ");
@@ -188,6 +190,7 @@ void interprateCommand(String &input) {
     recordFile = LittleFS.open("/records/" + name, "w");
     recordingInfo rInfo;
     rInfo.baud = baudRate;
+    rInfo.inverted = inverted;
 
     recordFile.write((byte*) &rInfo, sizeof(rInfo));
     recording = true;
@@ -229,23 +232,25 @@ void interprateCommand(String &input) {
       f.close();
       
       int offset = 0;
-      recordingInfo dsInfo;
-      memcpy(&dsInfo, buff + offset, sizeof(dsInfo));
-      offset += sizeof(dsInfo);
+      recordingInfo recordInfo;
+      memcpy(&recordInfo, buff + offset, sizeof(recordInfo));
+      offset += sizeof(recordInfo);
 
       delay(500);
 
       int dbg = 0;
       Serial.print("Playback baud: ");
-      Serial.println(dsInfo.baud);
-      outputSerial.setInverted();
-      outputSerial.begin(dsInfo.baud);
+      Serial.println(recordInfo.baud);
+      Serial.print("Inverted: ");
+      Serial.println(recordInfo.inverted);
+
+      if (recordInfo.inverted) outputSerial.setInverted();
+      outputSerial.begin(recordInfo.baud);
 
       playbackLen = len;
       playbackOffset = offset;
       playbackBuff = buff;
       playback = true;
-      Serial.println("DSA");
       // Serial.println(readIntFromBytes(buff, 0));
     } else {
       Serial.println("Recording with that name doesn't exists!");
