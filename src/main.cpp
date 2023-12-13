@@ -3,8 +3,8 @@
 #include <SoftwareSerial.h>
 // #include <EEPROM.h>
 
-SoftwareSerial inputSerial(17, -1, true);
-SoftwareSerial outputSerial(-1, 17, true);
+SoftwareSerial inputSerial(17, -1);
+SoftwareSerial outputSerial(-1, 17);
 
 byte* intToBytes(int n);
 int readIntFromBytes(byte* buff, int offset);
@@ -23,13 +23,15 @@ int playbackLen = 0;
 
 bool showHelp = true;
 
+// maybe it should note frames count? because there is a problem with reading it afterwards
 struct recordingInfo{
   int baud;
 };
 
 struct recordingFrame {
   int16_t delta;
-  int data;
+  uint8_t data;
+  uint8_t cheksum;
 };
 
 void setup() {
@@ -61,6 +63,7 @@ void loop() {
       if(inputSerial.available()) {
         frame.delta = millis() - lastRecordingTime;
         frame.data = inputSerial.read();
+        frame.cheksum = frame.delta ^ frame.data & 0xFF;
         recordFile.write((byte*)&frame, sizeof(frame));
 
         lastRecordingTime = millis();
@@ -68,22 +71,25 @@ void loop() {
     }
 
     inputSerial.end();
+    recordFile.close();
+    Serial.println("CLOSE");
   }
 
   if(playback) {
     recordingFrame frame;
     while (playbackLen > playbackOffset) {
       memcpy(&frame, playbackBuff + playbackOffset, sizeof(frame));
-      playbackOffset += sizeof(frame);
-      if (frame.delta < 0) {
+      playbackOffset += sizeof(recordingFrame);
+
+      uint8_t cheksum = frame.delta ^ frame.data & 0xFF;
+      if (frame.cheksum != cheksum) {
         continue;
       }
 
       delay(frame.delta);
-
       outputSerial.write(frame.data);
       // Serial1.write(~frame.data);
-      // Serial.print((char)frame.data);
+      Serial.print((char)frame.data);
     }
 
     playback = false;
@@ -140,7 +146,6 @@ void interprateCommand(String &input) {
     if (recording) {
       // recordFile.flush();
       recording = false;
-      recordFile.close();
 
       Serial.println("Stopped the recording and saved the file!");
     } else {
@@ -161,6 +166,7 @@ void interprateCommand(String &input) {
     int baudRate = baud.toInt();
     if (baudRate == 0) baudRate = 115200;
     // Serial1.setRX(17);
+    inputSerial.setInverted();
     inputSerial.begin(baudRate);
 
     Serial.print("Starting recording to file with name: ");
@@ -217,10 +223,10 @@ void interprateCommand(String &input) {
       delay(500);
 
       int dbg = 0;
+      Serial.print("Playback baud: ");
       Serial.println(dsInfo.baud);
+      outputSerial.setInverted();
       outputSerial.begin(dsInfo.baud);
-      // Serial1.setTX(16);
-      // Serial1.begin(dsInfo.baud);
 
       playbackLen = len;
       playbackOffset = offset;
