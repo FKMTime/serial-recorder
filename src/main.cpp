@@ -1,7 +1,6 @@
 #include <Arduino.h>
 #include <LittleFS.h>
 #include <SoftwareSerial.h>
-// #include <EEPROM.h>
 
 SoftwareSerial inputSerial(17, -1);
 SoftwareSerial outputSerial(-1, 17);
@@ -22,6 +21,7 @@ int playbackOffset = 0;
 int playbackLen = 0;
 
 bool showHelp = true;
+bool ledState = false;
 
 struct recordingInfo{
   int baud;
@@ -39,14 +39,6 @@ void setup() {
   if (!LittleFS.exists("/records")) {
     LittleFS.mkdir("/records");
   }
-
-  // EEPROM.begin(64);
-
-  // File file = LittleFS.open("/test.txt", "a+");
-  // if (file) {
-  //   file.print('.');
-  //   file.close();
-  // }
 }
 
 void setup1() {
@@ -65,6 +57,7 @@ void loop() {
         recordFile.write((byte*)&frame, sizeof(frame));
 
         lastRecordingTime = millis();
+        digitalWrite(LED_BUILTIN, ledState ? HIGH : LOW);
       }
     }
 
@@ -88,8 +81,8 @@ void loop() {
       memcpy(&frame, playbackBuff + playbackOffset, sizeof(frame));
       playbackOffset += sizeof(recordingFrame);
 
+      // STOP FRAME
       if (frame.delta == -1 && frame.cheksum == 0) {
-        // STOP FRAME
         break;
       }
 
@@ -261,6 +254,10 @@ void interprateCommand(String &input) {
   }
 
   Serial.println();
+}
+
+void recordCommand(String name, int baud, bool inverted) {
+
 }
 
 byte* intToBytes(int n) {
