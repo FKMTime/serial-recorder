@@ -55,8 +55,6 @@ void setup1() {
 }
 
 void loop() {
-  delay(100);
-
   recordingFrame frame;
   if (recording) {
     while (recording) {
@@ -71,8 +69,17 @@ void loop() {
     }
 
     inputSerial.end();
+
+    // STOP FRAME
+    frame.delta = -1;
+    frame.data = 0;
+    frame.cheksum = 0;
+    recordFile.write((byte*)&frame, sizeof(frame));
     recordFile.close();
-    Serial.println("CLOSE");
+
+    Serial.println("Recording has stopped!");
+    Serial.println();
+    Serial.print("> ");
   }
 
   if(playback) {
@@ -81,6 +88,11 @@ void loop() {
       memcpy(&frame, playbackBuff + playbackOffset, sizeof(frame));
       playbackOffset += sizeof(recordingFrame);
 
+      if (frame.delta == -1 && frame.cheksum == 0) {
+        // STOP FRAME
+        break;
+      }
+
       uint8_t cheksum = frame.delta ^ frame.data & 0xFF;
       if (frame.cheksum != cheksum) {
         continue;
@@ -88,14 +100,15 @@ void loop() {
 
       delay(frame.delta);
       outputSerial.write(frame.data);
-      // Serial1.write(~frame.data);
       Serial.print((char)frame.data);
     }
 
     playback = false;
     outputSerial.end();
-    // Serial1.end();
-    Serial.println("STOP");
+
+    Serial.println("Playback has stopped!");
+    Serial.println();
+    Serial.print("> ");
   }
 }
 
