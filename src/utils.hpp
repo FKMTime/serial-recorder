@@ -1,5 +1,26 @@
 #include <Arduino.h>
 
+int getRecordingDuration(byte* buff, int size) {
+  RecordingFrame frame;
+  
+  int offset = sizeof(RecordingInfo);
+  int tmpSum = 0;
+  while (size > offset) {
+      memcpy(&frame, buff + offset, sizeof(RecordingFrame));
+      offset += sizeof(RecordingFrame);
+
+      // STOP FRAME
+      if (frame.delta == -1 && frame.cheksum == 0) break;
+
+      uint8_t cheksum = frame.delta ^ frame.data & 0xFF;
+      if (frame.cheksum != cheksum) continue;
+
+      tmpSum += frame.delta;
+  }
+
+  return tmpSum;
+}
+
 String readSerialCommand() {
   Serial.print("> ");
   String input = "";

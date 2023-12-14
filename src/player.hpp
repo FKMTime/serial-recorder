@@ -44,7 +44,7 @@ void playerInit(String name, bool loop) {
 void play() {
     RecordingFrame frame;
     while (playbackLen > playbackOffset) {
-        memcpy(&frame, playbackBuff + playbackOffset, sizeof(frame));
+        memcpy(&frame, playbackBuff + playbackOffset, sizeof(RecordingFrame));
         playbackOffset += sizeof(RecordingFrame);
 
         // STOP FRAME

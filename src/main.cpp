@@ -28,13 +28,8 @@ void setup1() {
 }
 
 void loop() {
-  if (recording) {
-    record(); // IT LOOPS - SO ITS BLOCKING
-  }
-
-  if(playback) {
-    play();   // IT LOOPS - SO ITS BLOCKING
-  }
+  if (recording) record();  // IT LOOPS - SO ITS BLOCKING
+  if (playback) play();     // IT LOOPS - SO ITS BLOCKING
 }
 
 void loop1() {
@@ -164,9 +159,17 @@ void listCommand() {
 
   fs::Dir dir = LittleFS.openDir("/records");
   while(dir.next()) {
+    File f = dir.openFile("r");
+
+    byte buff[dir.fileSize()];
+    f.readBytes((char*)buff, dir.fileSize());
+    f.close();
+
     Serial.print(" - ");
     Serial.print(dir.fileName());
     Serial.print(" | Size: ");
-    Serial.println(dir.fileSize());
+    Serial.print(dir.fileSize());
+    Serial.print(" | Time: ");
+    Serial.println(getRecordingDuration(buff, dir.fileSize()));
   }
 }
