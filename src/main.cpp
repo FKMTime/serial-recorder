@@ -2,7 +2,10 @@
 #include <LittleFS.h>
 #include <SoftwareSerial.h>
 
+#include "recorder.hpp"
+#include "player.hpp"
 #include "utils.hpp"
+#include "structs.h"
 
 void playCommand(String input);
 void deleteCommand(String input);
@@ -10,19 +13,6 @@ void recordCommand(String input);
 void stopCommand();
 void listCommand();
 void interprateCommand(String &input);
-
-SoftwareSerial inputSerial(17, -1);
-SoftwareSerial outputSerial(-1, 17);
-
-bool recording = false;
-unsigned long lastRecordingTime = 0;
-File recordFile;
-
-bool playback = false;
-bool playbackLoop = false;
-byte* playbackBuff;
-int playbackOffset = 0;
-int playbackLen = 0;
 
 bool showHelp = true;
 
@@ -39,63 +29,11 @@ void setup1() {
 
 void loop() {
   if (recording) {
-    RecordingFrame frame;
-    while (recording) {
-      if(inputSerial.available()) {
-        frame.delta = millis() - lastRecordingTime;
-        frame.data = inputSerial.read();
-        frame.cheksum = frame.delta ^ frame.data & 0xFF;
-        recordFile.write((byte*)&frame, sizeof(frame));
-
-        lastRecordingTime = millis();
-      }
-    }
-
-    inputSerial.end();
-
-    // STOP FRAME
-    frame.delta = -1;
-    frame.data = 0;
-    frame.cheksum = 0;
-    recordFile.write((byte*)&frame, sizeof(frame));
-    recordFile.close();
-
-    Serial.println("Recording has stopped!");
-    Serial.println();
-    Serial.print("> ");
+    record(); // IT LOOPS - SO ITS BLOCKING
   }
 
   if(playback) {
-    RecordingFrame frame;
-    while (playbackLen > playbackOffset) {
-      memcpy(&frame, playbackBuff + playbackOffset, sizeof(frame));
-      playbackOffset += sizeof(RecordingFrame);
-
-      // STOP FRAME
-      if (frame.delta == -1 && frame.cheksum == 0) {
-        if(playbackLoop) {
-          playbackOffset = sizeof(RecordingInfo);
-          continue;
-        }
-        break;
-      }
-
-      uint8_t cheksum = frame.delta ^ frame.data & 0xFF;
-      if (frame.cheksum != cheksum) {
-        continue;
-      }
-
-      delay(frame.delta);
-      outputSerial.write(frame.data);
-      // Serial.print((char)frame.data);
-    }
-
-    playback = false;
-    outputSerial.end();
-
-    Serial.println("Playback has stopped!");
-    Serial.println();
-    Serial.print("> ");
+    play();   // IT LOOPS - SO ITS BLOCKING
   }
 }
 
@@ -156,38 +94,7 @@ void playCommand(String input) {
     return;
   }
 
-  playbackLoop = loopString.toInt() == 1;
-
-  File f = LittleFS.open("/records/" + name, "r");
-  if (!f) {
-    Serial.println("Recording with that name doesn't exists!");
-    return;
-  }
-
-  int len = f.size();
-  byte buff[len];
-  f.readBytes((char*)buff, len);
-  f.close();
-     
-  int offset = 0;
-  RecordingInfo recordInfo;
-  memcpy(&recordInfo, buff + offset, sizeof(recordInfo));
-  offset += sizeof(recordInfo);
-
-  delay(500);
-
-  Serial.print("Playback baud: ");
-  Serial.println(recordInfo.baud);
-  Serial.print("Inverted: ");
-  Serial.println(recordInfo.inverted);
-
-  if (recordInfo.inverted) outputSerial.setInverted();
-  outputSerial.begin(recordInfo.baud);
-
-  playbackLen = len;
-  playbackOffset = offset;
-  playbackBuff = buff;
-  playback = true;
+  playerInit(name, loopString.toInt() == 1);
 }
 
 void recordCommand(String input) {
@@ -205,21 +112,11 @@ void recordCommand(String input) {
   if (baudRate == 0) baudRate = 115200;
   bool inverted = invertedString.toInt() == 1;
 
-  if (inverted) inputSerial.setInverted();
-  inputSerial.begin(baudRate);
-
-  Serial.print("Starting recording to file with name: ");
-  Serial.println(name);
-
-  recordFile = LittleFS.open("/records/" + name, "w");
-
   RecordingInfo rInfo;
   rInfo.baud = baudRate;
   rInfo.inverted = inverted;
-  recordFile.write((byte*) &rInfo, sizeof(rInfo));
 
-  recording = true;
-  lastRecordingTime = millis();
+  recordInit(rInfo, name);
 }
 
 void deleteCommand(String input) {

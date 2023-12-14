@@ -1,30 +1,5 @@
 #include <Arduino.h>
 
-struct RecordingInfo{
-  int baud;
-  bool inverted;
-};
-
-struct RecordingFrame {
-  int16_t delta;
-  uint8_t data;
-  uint8_t cheksum;
-};
-
-// byte* intToBytes(int n) {
-//   byte bytes[4];
-//   bytes[0] = (byte)(n >> 24);
-//   bytes[1] = (byte)(n >> 16);
-//   bytes[2] = (byte)(n >> 8);
-//   bytes[3] = (byte)n;
-
-//   return bytes;
-// }
-
-// int readIntFromBytes(byte* buff, int offset) {
-//   return (buff[offset] << 24) + (buff[offset + 1] << 16) + (buff[offset + 2] << 8) + buff[offset + 3];
-// }
-
 String readSerialCommand() {
   Serial.print("> ");
   String input = "";
