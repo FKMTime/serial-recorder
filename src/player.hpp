@@ -1,16 +1,21 @@
 #include <LittleFS.h>
 #include <SoftwareSerial.h>
 #include "structs.h"
+#include "utils.hpp"
 
 SoftwareSerial outputSerial(-1, 17);
 
 bool playback = false;
+
 bool playbackLoop = false;
+String playbackName;
+
 byte* playbackBuff;
 int playbackOffset = 0;
 int playbackLen = 0;
 
 void playerInit(String name, bool loop) {
+    playbackName = name;
     playbackLoop = loop;
 
     File f = LittleFS.open("/records/" + name, "r");
@@ -30,7 +35,9 @@ void playerInit(String name, bool loop) {
     Serial.print("Playback baud: ");
     Serial.print(recordInfo.baud);
     Serial.print(" | Inverted: ");
-    Serial.println(recordInfo.inverted);
+    Serial.print(recordInfo.inverted ? "true" : "false");
+    Serial.print(" | Loop: ");
+    Serial.println(playbackLoop ? "true" : "false");
 
     if (recordInfo.inverted) outputSerial.setInverted();
     outputSerial.begin(recordInfo.baud);
@@ -43,17 +50,13 @@ void playerInit(String name, bool loop) {
 
 void play() {
     RecordingFrame frame;
-    while (playbackLen > playbackOffset) {
+    while (playbackLen > playbackOffset && playback) {
         memcpy(&frame, playbackBuff + playbackOffset, sizeof(RecordingFrame));
         playbackOffset += sizeof(RecordingFrame);
 
         // STOP FRAME
         if (frame.delta == -1 && frame.cheksum == 0) {
-            if(playbackLoop) {
-                playbackOffset = sizeof(RecordingInfo);
-                continue;
-            }
-
+            Serial.println("Stop frame hit (This shouldn't happen, but ok LMAO)");
             break;
         }
 
@@ -64,10 +67,35 @@ void play() {
         outputSerial.write(frame.data);
     }
 
+    if(playbackLoop && playback) {
+        playbackOffset = sizeof(RecordingInfo);
+        play();
+
+        return;
+    }
+
     playback = false;
     outputSerial.end();
 
     Serial.println("Playback has stopped!");
     Serial.println();
     Serial.print("> ");
+}
+
+void printPlaybackStatus() {
+    Serial.println("Playback status:");
+
+    Serial.print("Currently playing: ");
+    Serial.println(playbackName);
+
+    // Thats weird - totalTime is changing for each status command execuiton
+    int totalTime = getRecordingDuration(playbackBuff, playbackLen);
+    int currentTime = getRecordingDuration(playbackBuff, playbackOffset);
+    Serial.print("Playback time: ");
+    Serial.print(currentTime);
+    Serial.print("ms / ");
+    Serial.print(totalTime);
+    Serial.print("ms (");
+    Serial.print((currentTime / (double)totalTime) * 100);
+    Serial.println("%)");
 }

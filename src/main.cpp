@@ -1,6 +1,5 @@
 #include <Arduino.h>
 #include <LittleFS.h>
-#include <SoftwareSerial.h>
 
 #include "recorder.hpp"
 #include "player.hpp"
@@ -12,6 +11,7 @@ void deleteCommand(String input);
 void recordCommand(String input);
 void stopCommand();
 void listCommand();
+void statusCommand();
 void interprateCommand(String &input);
 
 bool showHelp = true;
@@ -45,6 +45,7 @@ void loop1() {
     Serial.println("- play [name] <loop 0|1>");
     Serial.println("- delete [name]");
     Serial.println("- list");
+    Serial.println("- status");
     Serial.println("- reboot");
     Serial.println();
 
@@ -71,12 +72,23 @@ void interprateCommand(String &input) {
   } else if(input.startsWith("play")) {
     input.remove(0, 5);
     playCommand(input);
+  } else if(input == "status") {
+    statusCommand();
   } else {
     Serial.println("Invalid command!");
     showHelp = true;
   }
 
   Serial.println();
+}
+
+void statusCommand() {
+  if (!playback) {
+    Serial.println("Nothing is currently playing!");
+    return;
+  }
+
+  printPlaybackStatus();
 }
 
 void playCommand(String input) {

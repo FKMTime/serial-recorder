@@ -9,7 +9,7 @@ struct RecordingInfo{
 };
 
 struct RecordingFrame {
-  int16_t delta;
+  uint16_t delta;
   uint8_t data;
   uint8_t cheksum;
 };

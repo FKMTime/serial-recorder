@@ -1,3 +1,6 @@
+#ifndef __UTILS_HPP__
+#define __UTILS_HPP__
+
 #include <Arduino.h>
 
 int getRecordingDuration(byte* buff, int size) {
@@ -62,3 +65,5 @@ String readNextArg(String &input) {
 
   return tmp;
 }
+
+#endif
