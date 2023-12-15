@@ -24,13 +24,17 @@ void playerInit(String name, bool loop) {
         return;
     }
 
-    int len = f.size();
-    byte buff[len];
-    f.readBytes((char*)buff, len);
+    playbackLen = f.size();  
+    playbackOffset = sizeof(RecordingInfo);
+    playbackBuff = (byte*)malloc(playbackLen);
+    memset(playbackBuff, 0, playbackLen);
+
+    // TODO: read file on playback (don't copy file to ram)
+    f.read(playbackBuff, playbackLen);
     f.close();
         
     RecordingInfo recordInfo;
-    memcpy(&recordInfo, buff, sizeof(RecordingInfo));
+    memcpy(&recordInfo, playbackBuff, sizeof(RecordingInfo));
 
     Serial.print("Playback baud: ");
     Serial.print(recordInfo.baud);
@@ -42,9 +46,6 @@ void playerInit(String name, bool loop) {
     if (recordInfo.inverted) outputSerial.setInverted();
     outputSerial.begin(recordInfo.baud);
 
-    playbackOffset = sizeof(RecordingInfo);
-    playbackLen = len;
-    playbackBuff = buff;
     playback = true;
 }
 
@@ -56,7 +57,6 @@ void play() {
 
         // STOP FRAME
         if (frame.delta == -1 && frame.cheksum == 0) {
-            Serial.println("Stop frame hit (This shouldn't happen, but ok LMAO)");
             break;
         }
 
@@ -88,7 +88,6 @@ void printPlaybackStatus() {
     Serial.print("Currently playing: ");
     Serial.println(playbackName);
 
-    // Thats weird - totalTime is changing for each status command execuiton
     int totalTime = getRecordingDuration(playbackBuff, playbackLen);
     int currentTime = getRecordingDuration(playbackBuff, playbackOffset);
     Serial.print("Playback time: ");
