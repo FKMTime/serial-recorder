@@ -1,10 +1,12 @@
 #include <Arduino.h>
 #include <LittleFS.h>
 
-#include "recorder.hpp"
-#include "player.hpp"
 #include "utils.hpp"
 #include "structs.h"
+#include "player/player.h"
+#include "recorder/recorder.h"
+
+#define SERIAL_PIN 17
 
 void playCommand(String input);
 void deleteCommand(String input);
@@ -13,6 +15,9 @@ void stopCommand();
 void listCommand();
 void statusCommand();
 void interprateCommand(String &input);
+
+Player player(SERIAL_PIN);
+Recorder recorder(SERIAL_PIN);
 
 bool showHelp = true;
 
@@ -28,8 +33,8 @@ void setup1() {
 }
 
 void loop() {
-  if (recording) record();  // IT LOOPS - SO ITS BLOCKING
-  if (playback) play();     // IT LOOPS - SO ITS BLOCKING
+  recorder.loop(); // BLOCKING
+  player.loop();   // BLOCKING
 }
 
 void loop1() {
@@ -83,12 +88,12 @@ void interprateCommand(String &input) {
 }
 
 void statusCommand() {
-  if (!playback) {
+  if (!player.state()) {
     Serial.println("Nothing is currently playing!");
     return;
   }
 
-  printPlaybackStatus();
+  player.printStatus();
 }
 
 void playCommand(String input) {
@@ -101,7 +106,7 @@ void playCommand(String input) {
     return;
   }
 
-  playerInit(name, loopString.toInt() == 1);
+  player.play(name, loopString.toInt() == 1);
 }
 
 void recordCommand(String input) {
@@ -123,7 +128,7 @@ void recordCommand(String input) {
   rInfo.baud = baudRate;
   rInfo.inverted = inverted;
 
-  recordInit(rInfo, name);
+  recorder.record(rInfo, name);
 }
 
 void deleteCommand(String input) {
@@ -145,12 +150,10 @@ void deleteCommand(String input) {
 }
 
 void stopCommand() {
-  if (recording) {
-    recording = false;
-    Serial.println("Stopped the recording and saved the file!");
-  } else if (playback) {
-    playback = false;
-    Serial.println("Stopped the playback!");
+  if (recorder.state()) {
+    recorder.stop();
+  } else if (player.state()) {
+    player.stop();
   } else {
     Serial.println("Recording/Playback isn't started!");
   }
@@ -180,8 +183,8 @@ void listCommand() {
     Serial.print(" - ");
     Serial.print(dir.fileName());
     Serial.print(" | Size: ");
-    Serial.print(dir.fileSize());
-    Serial.print(" | Time: ");
-    Serial.println(getRecordingDuration(buff, dir.fileSize()));
+    Serial.println(dir.fileSize());
+    // Serial.print(" | Time: ");
+    // Serial.println(getRecordingDuration(buff, dir.fileSize()));
   }
 }
